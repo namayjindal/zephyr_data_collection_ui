@@ -64,7 +64,7 @@ SENSOR_CONFIGS = {
 }
 
 EXERCISE_CONFIGS = {
-    "single_hand": [3],  # Only right hand sensor
+    "single_hand": [1],  # Only right hand sensor
     "both_hands": [3, 4],  # Right and left hand sensors
     "hands_and_ball": [1, 2, 3],  # All sensors
     "all_sensors": [1, 2, 3, 4, 5]  # All sensors
@@ -179,7 +179,7 @@ class MainWindow(QWidget):
         self.setLayout(layout)
         
         self.setWindowTitle('BLE Sensor Data Collection')
-        self.setGeometry(300, 300, 400, 300)
+        self.setGeometry(500, 500, 400, 400)
 
 class SchoolInfoPage(QWidget):
     def __init__(self, stacked_widget):
@@ -463,8 +463,8 @@ class ExercisePage(QWidget):
         layout.addRow(quantity_label, quantity_input)
 
         buttons = QHBoxLayout()
-        save_button = QPushButton("Save")
         cancel_button = QPushButton("Cancel")
+        save_button = QPushButton("Save")
         buttons.addWidget(save_button)
         buttons.addWidget(cancel_button)
         layout.addRow(buttons)
@@ -490,6 +490,8 @@ class ExercisePage(QWidget):
     def save_metadata(self, quality, quantity):
         school_info = self.stacked_widget.widget(0)
         student_info = self.stacked_widget.widget(1)
+
+        print('Saving metadata...')
         
         metadata = {
             "school_name": school_info.school_name_input.text(),
@@ -504,23 +506,34 @@ class ExercisePage(QWidget):
             "quantity": quantity,
             "csv_filename": self.csv_filename
         }
+
+        print('Metadata:', metadata)
         
-        if os.path.exists(self.json_filename):
-            with open(self.json_filename, 'r') as f:
-                data = json.load(f)
-        else:
-            data = []
-        
-        data.append(metadata)
-        
-        with open(self.json_filename, 'w') as f:
-            json.dump(data, f, indent=2)
-        
-        QMessageBox.information(self, 'Data Saved', 
-                                f'Data has been saved to {self.csv_filename}\n'
-                                f'Metadata saved to {self.json_filename}\n\n'
-                                f'JSON file content:\n{json.dumps(metadata, indent=2)}')
-        self.reset_exercise_page()
+        try:
+            if os.path.exists(self.json_filename):
+                print(f"JSON file {self.json_filename} exists. Loading existing data.")
+                with open(self.json_filename, 'r') as f:
+                    data = json.load(f)
+            else:
+                print(f"JSON file {self.json_filename} does not exist. Creating new file.")
+                data = []
+            
+            data.append(metadata)
+            
+            with open(self.json_filename, 'w') as f:
+                json.dump(data, f, indent=2)
+            print(f"Metadata saved successfully to {self.json_filename}")
+            
+            QMessageBox.information(self, 'Data Saved', 
+                                    f'Data has been saved to {self.csv_filename}\n'
+                                    f'Metadata saved to {self.json_filename}\n\n'
+                                    f'JSON file content:\n{json.dumps(metadata, indent=2)}')
+            self.reset_exercise_page()
+            
+        except Exception as e:
+            print(f"Error saving metadata to JSON file: {e}")
+            QMessageBox.critical(self, 'Error', f"Failed to save metadata to JSON file: {e}")
+
 
 
     def reset_exercise_page(self):
@@ -540,63 +553,6 @@ class ExercisePage(QWidget):
         # This method is called when stopping the exercise
         # The data is already saved in real-time, so we don't need to do anything here
         pass
-
-    def ask_keep_data(self):
-        reply = QMessageBox.question(self, 'Exercise Completed', 
-                                     'Do you want to keep the collected data?',
-                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
-        
-        if reply == QMessageBox.Yes:
-            self.label_data()
-        else:
-            os.remove(self.csv_filename)
-            self.reset_exercise_page()
-
-    def label_data(self):
-        dialog = QDialog(self)
-        dialog.setWindowTitle("Label Exercise Data")
-        layout = QFormLayout()
-
-        quality_label = QLabel("Exercise Quality:")
-        quality_combo = QComboBox()
-        quality_combo.addItems(['Good', 'Bad', 'Anomaly'])
-        layout.addRow(quality_label, quality_combo)
-
-        quantity_label = QLabel("How many Reps? / How much Time?")
-        quantity_input = QLineEdit()
-        layout.addRow(quantity_label, quantity_input)
-
-        buttons = QHBoxLayout()
-        save_button = QPushButton("Save")
-        cancel_button = QPushButton("Cancel")
-        buttons.addWidget(save_button)
-        buttons.addWidget(cancel_button)
-        layout.addRow(buttons)
-
-        dialog.setLayout(layout)
-
-        def on_save():
-            quality = quality_combo.currentText()
-            quantity = quantity_input.text()
-            self.save_labels(quality, quantity)
-            dialog.accept()
-
-        def on_cancel():
-            dialog.reject()
-
-        save_button.clicked.connect(on_save)
-        cancel_button.clicked.connect(on_cancel)
-
-        result = dialog.exec_()
-        if result == QDialog.Rejected:
-            self.ask_keep_data()  # Ask again if they want to keep the data
-
-    def save_labels(self, quality, quantity):
-        
-        QMessageBox.information(self, 'Data Saved', 
-                                f'Data has been saved to {self.csv_filename} with labels:\nQuality: {quality}\nQuantity: {quantity}')
-        self.reset_exercise_page()
-
 
 async def main():
     def close_future(future, loop):
