@@ -67,7 +67,26 @@ EXERCISE_CONFIGS = {
     "single_hand": [4],  # Only right hand sensor
     "both_hands": [3, 4],  # Right and left hand sensors
     "hands_and_ball": [1, 2, 3],  # All sensors
-    "all_sensors": [1, 2, 3, 4, 5]  # All sensors
+    "all_sensors": [1, 2, 3, 4, 5],  # All sensors
+    "Dribbling in Fig - 8": [1, 2, 3, 4, 5],  # All sensors
+    "Dribbling in Fig - O": [1, 2, 3, 4, 5],  # All sensors
+    "Jumping Jack with Clap": [1, 2, 3, 4],
+    "Jumping Jack without Clap": [3, 4],
+    "Criss Cross with Clap": [1, 2, 3, 4],
+    "Criss Cross without Clap": [3, 4],
+    "Criss Cross with leg forward": [3, 4],
+    "Skipping": [1, 2, 3, 4],
+    "Large Ball Bounce and Catch": [1, 2, 5],
+    "Hit Balloon Up": [1, 2],
+    "Forward Backward Spread Legs and Back": [3, 4],
+    "Alternate feet forward backward": [3, 4],
+    "Jump symmetrically": [3, 4],
+    "Jump asymmetrically": [3, 4],
+    "Hop between lines": [3, 4],
+    "Hope forward on one leg": [3, 4],
+    "Step Down from Height": [3, 4],
+    "Step over an obstacle": [3, 4],
+    "Stand on one leg": [3, 4],
 }
 
 logging.basicConfig(level=logging.DEBUG)
