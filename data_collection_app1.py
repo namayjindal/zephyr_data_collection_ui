@@ -64,7 +64,7 @@ SENSOR_CONFIGS = {
 }
 
 EXERCISE_CONFIGS = {
-    "single_hand": [1],  # Only right hand sensor
+    "single_hand": [4],  # Only right hand sensor
     "both_hands": [3, 4],  # Right and left hand sensors
     "hands_and_ball": [1, 2, 3],  # All sensors
     "all_sensors": [1, 2, 3, 4, 5]  # All sensors
@@ -179,7 +179,7 @@ class MainWindow(QWidget):
         self.setLayout(layout)
         
         self.setWindowTitle('BLE Sensor Data Collection')
-        self.setGeometry(500, 500, 400, 400)
+        self.setGeometry(500, 400, 400, 400)
 
 class SchoolInfoPage(QWidget):
     def __init__(self, stacked_widget):
@@ -218,7 +218,7 @@ class StudentInfoPage(QWidget):
         
         self.student_name_input = QLineEdit()
         self.grade_input = QComboBox()
-        self.grade_input.addItems(["1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th", "9th", "10th", "11th", "12th"])
+        self.grade_input.addItems(["Nursery", "Lower KG", "Senior KG", "1st", "2nd", "3rd", "4th", "5th", "6th", "7th"])
         self.height_input = QLineEdit()
         self.weight_input = QLineEdit()
         self.gender_input = QComboBox()
@@ -295,10 +295,10 @@ class ExercisePage(QWidget):
         layout.addWidget(self.timer_label)
         
         button_layout = QHBoxLayout()
-        self.pause_button = QPushButton("Pause Exercise")
+        """self.pause_button = QPushButton("Pause Exercise")
         self.pause_button.clicked.connect(self.pause_exercise)
         self.pause_button.setEnabled(False)
-        button_layout.addWidget(self.pause_button)
+        button_layout.addWidget(self.pause_button)"""
         
         self.stop_button = QPushButton("Stop Exercise")
         self.stop_button.clicked.connect(self.stop_exercise)
@@ -357,7 +357,7 @@ class ExercisePage(QWidget):
         asyncio.ensure_future(self.write_to_sensors_and_start())
         self.timer.start(1000)
         self.start_button.setEnabled(False)
-        self.pause_button.setEnabled(True)
+        # self.pause_button.setEnabled(True)
         self.stop_button.setEnabled(True)
 
     def generate_filenames(self):
@@ -422,7 +422,7 @@ class ExercisePage(QWidget):
         minutes, seconds = divmod(remainder, 60)
         self.timer_label.setText(f"{hours:02d}:{minutes:02d}:{seconds:02d}")
 
-    def pause_exercise(self):
+    """def pause_exercise(self):
         if not self.is_paused:
             self.timer.stop()
             self.pause_button.setText("Resume Exercise")
@@ -430,7 +430,7 @@ class ExercisePage(QWidget):
         else:
             self.timer.start(1000)
             self.pause_button.setText("Pause Exercise")
-            self.is_paused = False
+            self.is_paused = False"""
 
     def stop_exercise(self):
         self.timer.stop()
@@ -540,7 +540,7 @@ class ExercisePage(QWidget):
         self.exercise_time = 0
         self.timer_label.setText("00:00:00")
         self.start_button.setEnabled(False)
-        self.pause_button.setEnabled(False)
+        # self.pause_button.setEnabled(False)
         self.stop_button.setEnabled(False)
         self.connect_button.setEnabled(True)
         self.status_label.setText("Not connected")
