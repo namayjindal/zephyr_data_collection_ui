@@ -475,7 +475,7 @@ class ExercisePage(QWidget):
 
         quality_label = QLabel("Exercise Quality:")
         quality_combo = QComboBox()
-        quality_combo.addItems(['Good', 'Bad', 'Anomaly'])
+        quality_combo.addItems(['Good', 'Bad', 'Anomaly', 'Idle'])
         layout.addRow(quality_label, quality_combo)
 
         quantity_label = QLabel("How many Reps? / How much Time?")
