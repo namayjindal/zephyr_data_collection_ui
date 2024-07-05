@@ -1,3 +1,4 @@
+import hashlib
 import sys
 import asyncio
 from PyQt5.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, 
@@ -12,6 +13,7 @@ import logging
 import os
 from collections import defaultdict
 import qasync
+import json
 
 # Add these imports at the top of your file
 import objc
@@ -237,11 +239,19 @@ class StudentInfoPage(QWidget):
         layout.addWidget(QLabel("Exercise:"))
         layout.addWidget(self.exercise_input)
         
+        button_layout = QHBoxLayout()
+        back_button = QPushButton("Back")
+        back_button.clicked.connect(self.back_page)
         next_button = QPushButton("Next")
         next_button.clicked.connect(self.next_page)
-        layout.addWidget(next_button)
+        button_layout.addWidget(back_button)
+        button_layout.addWidget(next_button)
+        layout.addLayout(button_layout)
         
         self.setLayout(layout)
+
+    def back_page(self):
+        self.stacked_widget.setCurrentIndex(0)
 
     def next_page(self):
         self.stacked_widget.setCurrentIndex(2)
@@ -254,6 +264,7 @@ class ExercisePage(QWidget):
         
         self.sensor_data = None
         self.csv_filename = None
+        self.json_filename = None
         self.connected_sensors = []
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_timer)
@@ -264,7 +275,6 @@ class ExercisePage(QWidget):
         self.ble_worker.connected.connect(self.on_sensor_connected)
         self.ble_worker.disconnected.connect(self.on_sensor_disconnected)
         self.ble_worker.data_received.connect(self.on_data_received)
-
 
     def initUI(self):
         layout = QVBoxLayout()
@@ -297,18 +307,25 @@ class ExercisePage(QWidget):
         
         layout.addLayout(button_layout)
         
+        back_button = QPushButton("Back")
+        back_button.clicked.connect(self.back_page)
+        layout.addWidget(back_button)
+        
         self.setLayout(layout)
 
+    def back_page(self):
+        self.stacked_widget.setCurrentIndex(1)
+
     def connect_sensors(self):
+        self.status_label.setText("Connecting...")
         exercise = self.stacked_widget.widget(1).exercise_input.currentText()
         self.sensor_ids = EXERCISE_CONFIGS[exercise]
-        self.sensor_data = SensorData(self.sensor_ids)  # Update SensorData with correct sensor IDs
+        self.sensor_data = SensorData(self.sensor_ids)
         asyncio.ensure_future(self.ble_worker.connect_sensors(self.sensor_ids))
 
-
     def on_sensor_connected(self, sensor_name):
-        self.status_label.setText(f"Connected to {sensor_name}")
         self.connected_sensors.append(sensor_name)
+        self.status_label.setText(f"Connected: {', '.join(self.connected_sensors)}")
         if len(self.connected_sensors) == len(self.sensor_ids):
             self.start_button.setEnabled(True)
 
@@ -316,7 +333,7 @@ class ExercisePage(QWidget):
         self.status_label.setText(f"Failed to connect to {sensor_name}")
 
     def start_exercise(self):
-        self.csv_filename = self.generate_csv_filename()
+        self.generate_filenames()
         self.create_csv_file()
         asyncio.ensure_future(self.write_to_sensors_and_start())
         self.timer.start(1000)
@@ -324,46 +341,21 @@ class ExercisePage(QWidget):
         self.pause_button.setEnabled(True)
         self.stop_button.setEnabled(True)
 
-    async def write_to_sensors_and_start(self):
-        await self.ble_worker.write_reference_timestamp()
-        await self.ble_worker.start_notifications()
-
-    def pause_exercise(self):
-        if not self.is_paused:
-            self.timer.stop()
-            self.pause_button.setText("Resume Exercise")
-            self.is_paused = True
-        else:
-            self.timer.start(1000)
-            self.pause_button.setText("Pause Exercise")
-            self.is_paused = False
-
-    def stop_exercise(self):
-        self.timer.stop()
-        asyncio.ensure_future(self.ble_worker.stop_notifications())
-        self.save_data()
-        self.ask_keep_data()
-
-    def on_data_received(self, sensor_id, timestamp, values):
-        if not self.is_paused:
-            self.sensor_data.add_data(sensor_id, timestamp, values)
-            self.write_to_csv()
-        logger.debug(f"Received data for sensor {sensor_id}, timestamp {timestamp}")
-
-    def update_timer(self):
-        self.exercise_time += 1
-        hours, remainder = divmod(self.exercise_time, 3600)
-        minutes, seconds = divmod(remainder, 60)
-        self.timer_label.setText(f"{hours:02d}:{minutes:02d}:{seconds:02d}")
-
-    def generate_csv_filename(self):
+    def generate_filenames(self):
         school_info = self.stacked_widget.widget(0)
         student_info = self.stacked_widget.widget(1)
         school_name = school_info.school_name_input.text()
         date = school_info.date_input.selectedDate().toString(Qt.ISODate)
         student_name = student_info.student_name_input.text()
         exercise = student_info.exercise_input.currentText()
-        return f"{school_name}_{date}_{student_name}_{exercise}.csv"
+        
+        # Generate a 10-digit hash
+        hash_input = f"{school_name}{student_name}{exercise}{datetime.now().isoformat()}"
+        hash_object = hashlib.sha256(hash_input.encode())
+        hash_id = hash_object.hexdigest()[:10]
+        
+        self.csv_filename = f"{school_name}_{student_name}_{exercise}_{hash_id}.csv"
+        self.json_filename = f"{school_name}_{date}.json"
 
     def create_csv_file(self):
         headers = []
@@ -385,6 +377,15 @@ class ExercisePage(QWidget):
             writer = csv.writer(file)
             writer.writerow(headers)
 
+    async def write_to_sensors_and_start(self):
+        await self.ble_worker.write_reference_timestamp()
+        await self.ble_worker.start_notifications()
+
+    def on_data_received(self, sensor_id, timestamp, values):
+        if not self.is_paused:
+            self.sensor_data.add_data(sensor_id, timestamp, values)
+            self.write_to_csv()
+
     def write_to_csv(self):
         complete_data = self.sensor_data.get_synced_data()
         if complete_data:
@@ -395,7 +396,110 @@ class ExercisePage(QWidget):
                 writer = csv.writer(file)
                 writer.writerow(row_data)
             self.sensor_data.pop_synced_data()
-            logger.debug(f"Wrote data to CSV: {row_data}")
+
+    def update_timer(self):
+        self.exercise_time += 1
+        hours, remainder = divmod(self.exercise_time, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        self.timer_label.setText(f"{hours:02d}:{minutes:02d}:{seconds:02d}")
+
+    def pause_exercise(self):
+        if not self.is_paused:
+            self.timer.stop()
+            self.pause_button.setText("Resume Exercise")
+            self.is_paused = True
+        else:
+            self.timer.start(1000)
+            self.pause_button.setText("Pause Exercise")
+            self.is_paused = False
+
+    def stop_exercise(self):
+        self.timer.stop()
+        asyncio.ensure_future(self.ble_worker.stop_notifications())
+        self.ask_keep_data()
+
+    def ask_keep_data(self):
+        reply = QMessageBox.question(self, 'Exercise Completed', 
+                                     'Do you want to keep the collected data?',
+                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
+        
+        if reply == QMessageBox.Yes:
+            self.label_data()
+        else:
+            os.remove(self.csv_filename)
+            self.reset_exercise_page()
+
+    def label_data(self):
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Label Exercise Data")
+        layout = QFormLayout()
+
+        quality_label = QLabel("Exercise Quality:")
+        quality_combo = QComboBox()
+        quality_combo.addItems(['Good', 'Bad', 'Anomaly'])
+        layout.addRow(quality_label, quality_combo)
+
+        quantity_label = QLabel("How many Reps? / How much Time?")
+        quantity_input = QLineEdit()
+        layout.addRow(quantity_label, quantity_input)
+
+        buttons = QHBoxLayout()
+        save_button = QPushButton("Save")
+        cancel_button = QPushButton("Cancel")
+        buttons.addWidget(save_button)
+        buttons.addWidget(cancel_button)
+        layout.addRow(buttons)
+
+        dialog.setLayout(layout)
+
+        def on_save():
+            quality = quality_combo.currentText()
+            quantity = quantity_input.text()
+            self.save_metadata(quality, quantity)
+            dialog.accept()
+
+        def on_cancel():
+            dialog.reject()
+
+        save_button.clicked.connect(on_save)
+        cancel_button.clicked.connect(on_cancel)
+
+        result = dialog.exec_()
+        if result == QDialog.Rejected:
+            self.ask_keep_data()  # Ask again if they want to keep the data
+
+    def save_metadata(self, quality, quantity):
+        school_info = self.stacked_widget.widget(0)
+        student_info = self.stacked_widget.widget(1)
+        
+        metadata = {
+            "school_name": school_info.school_name_input.text(),
+            "date": school_info.date_input.selectedDate().toString(Qt.ISODate),
+            "student_name": student_info.student_name_input.text(),
+            "grade": student_info.grade_input.currentText(),
+            "height": student_info.height_input.text(),
+            "weight": student_info.weight_input.text(),
+            "gender": student_info.gender_input.currentText(),
+            "exercise": student_info.exercise_input.currentText(),
+            "quality": quality,
+            "quantity": quantity,
+            "csv_filename": self.csv_filename
+        }
+        
+        if os.path.exists(self.json_filename):
+            with open(self.json_filename, 'r') as f:
+                data = json.load(f)
+        else:
+            data = []
+        
+        data.append(metadata)
+        
+        with open(self.json_filename, 'w') as f:
+            json.dump(data, f, indent=2)
+        
+        QMessageBox.information(self, 'Data Saved', 
+                                f'Data has been saved to {self.csv_filename}\nMetadata saved to {self.json_filename}')
+        self.reset_exercise_page()
 
     def reset_exercise_page(self):
         self.exercise_time = 0
@@ -466,11 +570,6 @@ class ExercisePage(QWidget):
             self.ask_keep_data()  # Ask again if they want to keep the data
 
     def save_labels(self, quality, quantity):
-        # Append the labels to the CSV file
-        with open(self.csv_filename, 'a', newline='') as file:
-            writer = csv.writer(file)
-            writer.writerow(['Label Quality', 'Label Quantity'])
-            writer.writerow([quality, quantity])
         
         QMessageBox.information(self, 'Data Saved', 
                                 f'Data has been saved to {self.csv_filename} with labels:\nQuality: {quality}\nQuantity: {quantity}')
