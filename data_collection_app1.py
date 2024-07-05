@@ -5,7 +5,7 @@ from PyQt5.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout, QL
                              QPushButton, QComboBox, QCalendarWidget, QMessageBox, QStackedWidget,
                              QDialog, QFormLayout)
 from PyQt5.QtCore import QTimer, QDateTime, Qt, pyqtSignal, QObject
-from bleak import BleakClient, BleakScanner
+from bleak import BleakClient, BleakScanner, BleakError
 import csv
 import struct
 from datetime import datetime
@@ -317,17 +317,36 @@ class ExercisePage(QWidget):
         self.stacked_widget.setCurrentIndex(1)
 
     def connect_sensors(self):
+        self.status_label.setText("Checking Bluetooth...")
+        asyncio.ensure_future(self.check_bluetooth_and_connect())
+
+    async def check_bluetooth_and_connect(self):
+        try:
+            # Attempt to discover devices to check if Bluetooth is on
+            await BleakScanner.discover(timeout=1.0)
+        except BleakError:
+            QMessageBox.warning(self, "Bluetooth Off", "Please turn on Bluetooth and try again.")
+            self.status_label.setText("Bluetooth is off")
+            return
+
         self.status_label.setText("Connecting...")
         exercise = self.stacked_widget.widget(1).exercise_input.currentText()
         self.sensor_ids = EXERCISE_CONFIGS[exercise]
         self.sensor_data = SensorData(self.sensor_ids)
-        asyncio.ensure_future(self.ble_worker.connect_sensors(self.sensor_ids))
+        await self.ble_worker.connect_sensors(self.sensor_ids)
+
+        # Check if all sensors are connected
+        if len(self.connected_sensors) != len(self.sensor_ids):
+            QMessageBox.warning(self, "Connection Incomplete", 
+                                "Not all sensors were connected. Please check that all sensors are on and try connecting again.")
+            self.status_label.setText("Connection incomplete")
+            self.start_button.setEnabled(False)
+        else:
+            self.start_button.setEnabled(True)
 
     def on_sensor_connected(self, sensor_name):
         self.connected_sensors.append(sensor_name)
         self.status_label.setText(f"Connected: {', '.join(self.connected_sensors)}")
-        if len(self.connected_sensors) == len(self.sensor_ids):
-            self.start_button.setEnabled(True)
 
     def on_sensor_disconnected(self, sensor_name):
         self.status_label.setText(f"Failed to connect to {sensor_name}")
@@ -498,8 +517,11 @@ class ExercisePage(QWidget):
             json.dump(data, f, indent=2)
         
         QMessageBox.information(self, 'Data Saved', 
-                                f'Data has been saved to {self.csv_filename}\nMetadata saved to {self.json_filename}')
+                                f'Data has been saved to {self.csv_filename}\n'
+                                f'Metadata saved to {self.json_filename}\n\n'
+                                f'JSON file content:\n{json.dumps(metadata, indent=2)}')
         self.reset_exercise_page()
+
 
     def reset_exercise_page(self):
         self.exercise_time = 0
