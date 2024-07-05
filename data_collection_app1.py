@@ -86,7 +86,8 @@ EXERCISE_CONFIGS = {
     "Hope forward on one leg": [3, 4],
     "Step Down from Height": [3, 4],
     "Step over an obstacle": [3, 4],
-    "Stand on one leg": [3, 4],
+    "Stand on one leg (dominant)": [3, 4],
+    "Stand on one leg (non-dominant)": [3, 4],
 }
 
 logging.basicConfig(level=logging.DEBUG)
